@@ -1,5 +1,4 @@
 from typing import List, Tuple
-from chromadb.api import Collection
 from langchain import LLMChain, PromptTemplate
 from langchain.chains.question_answering import load_qa_chain
 from langchain.vectorstores import Chroma
@@ -9,35 +8,22 @@ from langchain.chains import ConversationalRetrievalChain
 
 ############## 유사도 순으로 문서 검색 ##############
 
-def query_papers(collection: Collection,
+def query_papers(vectorstore: Chroma,
                  embedded_query: List[float],
                  top_k: int) -> List[Tuple[str, str]]:
-    top_results = collection.query(
-        query_embeddings=embedded_query, 
-        n_results=top_k*3, 
-        include=["metadatas"], 
-    )
+    results = vectorstore.similarity_search_by_vector(embedded_query, k=top_k*3)
+    docs = [(result.metadata["doc_idx"], result.metadata["doc_title"]) for result in results]
 
-    if top_results["metadatas"] is not None:
-        doc_idxs = [result["doc_idx"] for result in top_results["metadatas"][0]]
-        doc_titles = [result["doc_title"] for result in top_results["metadatas"][0]]
+    recommended_papers = []
+    seen_paper_idxs = set()
+    for doc_idx, doc_title in docs:
+        if doc_idx not in seen_paper_idxs:
+            seen_paper_idxs.add(doc_idx)
+            recommended_papers.append((doc_idx, doc_title))
+        if(len(recommended_papers)) == top_k:
+            break
 
-        recommended_papers = []
-        seen_paper_idxs = set()
-        for i in range(len(doc_idxs)):
-            doc_idx = doc_idxs[i]
-            file_name = doc_titles[i]
-
-            if doc_idx not in seen_paper_idxs:
-                seen_paper_idxs.add(doc_idx)
-                recommended_papers.append((doc_idx, file_name))
-
-            if(len(recommended_papers)) == top_k:
-                break
-
-        return recommended_papers
-
-    return []
+    return recommended_papers
 
 ############## 유사도 순으로 문서 검색 ##############
 
@@ -72,13 +58,11 @@ def make_chain(vectorstore: Chroma, llm, doc_idx):
     question_generator = LLMChain(
         llm=llm, 
         prompt=CONDENSE_PROMPT, 
-        verbose=True
     )
 
     doc_chain = load_qa_chain(
         llm=llm, 
         prompt=QA_PROMPT, 
-        verbose=True
     )
 
     return ConversationalRetrievalChain(
@@ -95,7 +79,6 @@ def make_chain(vectorstore: Chroma, llm, doc_idx):
         combine_docs_chain=doc_chain, 
         question_generator=question_generator, 
         return_source_documents=True, 
-        verbose=True, 
     )
 
 ############## Setup QA Chain ##############
