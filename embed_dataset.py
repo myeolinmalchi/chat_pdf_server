@@ -75,27 +75,31 @@ def embed_dataset(path, chroma_client, collection_name, embeddings, client_setti
             print("Collection 초기화에 실패하였습니다.")
             raise EmbeddingFailureException
 
-load_dotenv()
+def main():
+    load_dotenv()
 
-CHROMA_DB_HOST = os.environ['CHROMA_DB_HOST']
-CHROMA_DB_PORT = os.environ['CHROMA_DB_PORT']
+    CHROMA_DB_HOST = os.environ['CHROMA_DB_HOST']
+    CHROMA_DB_PORT = os.environ['CHROMA_DB_PORT']
 
-client_settings = Settings(
-    chroma_api_impl="rest", 
-    chroma_server_host=CHROMA_DB_HOST, 
-    chroma_server_http_port=CHROMA_DB_PORT
-)
+    client_settings = Settings(
+        chroma_api_impl="rest", 
+        chroma_server_host=CHROMA_DB_HOST, 
+        chroma_server_http_port=CHROMA_DB_PORT
+    )
 
-print(f"Chroma DB에 연결합니다. [{CHROMA_DB_HOST}:{CHROMA_DB_PORT}]\n")
+    print(f"Chroma DB에 연결합니다. [{CHROMA_DB_HOST}:{CHROMA_DB_PORT}]\n")
 
-chroma_client = chromadb.Client(client_settings)
+    chroma_client = chromadb.Client(client_settings)
 
-embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
-embed_dataset(
-    path='./datasets', 
-    chroma_client=chroma_client, 
-    collection_name='test_collection', 
-    embeddings=embeddings, 
-    client_settings=client_settings
-)
+    embed_dataset(
+        path='./datasets', 
+        chroma_client=chroma_client, 
+        collection_name='test_collection', 
+        embeddings=embeddings, 
+        client_settings=client_settings
+    )
+
+if __name__ == '__main__':
+    main()
