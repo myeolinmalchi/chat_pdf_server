@@ -21,6 +21,7 @@ pip install -r requirements.txt
 OPENAI_API_KEY=your_openai_api_key
 CHROMA_DB_HOST=chroma_db_server_host
 CHROMA_DB_PORT=chroma_db_server_port
+CHROMA_DB_COLLECTION=chroma_db_collection
 ```
 
 4. Create `dataset/` directory and move `.pdf` files.
@@ -33,8 +34,9 @@ mkdir dataset
 
 ```
 python embed_dataset.py
-python -m unicorn main:app --reload
+python -m uvicorn main:app --reload
 ```
 
 Now, Server is run on `127.0.0.1:8000`.
+
 You can find API documentation at `127.0.0.1:8000/docs`.
