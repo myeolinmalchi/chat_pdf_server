@@ -17,6 +17,7 @@ clickhouse-connect==0.5.25
 colorama==0.4.6
 coloredlogs==15.0.1
 contourpy==1.0.7
+ctransformers==0.2.5
 cycler==0.11.0
 dataclasses-json==0.5.7
 datasets==2.10.1
@@ -64,11 +65,13 @@ mpmath==1.3.0
 multidict==6.0.4
 multiprocess==0.70.14
 mypy-extensions==1.0.0
+mysqlclient==2.1.1
 networkx==3.0
 nltk==3.8.1
 numexpr==2.8.4
 numpy==1.24.2
 onnxruntime==1.15.0
+onnxruntime-gpu==1.15.0
 openai==0.27.7
 openapi-schema-pydantic==1.2.4
 orjson==3.8.7
@@ -110,6 +113,7 @@ starlette==0.26.1
 sympy==1.11.1
 tenacity==8.2.2
 threadpoolctl==3.1.0
+tk==0.1.0
 tokenizers==0.13.2
 tomli==2.0.1
 toolz==0.12.0
