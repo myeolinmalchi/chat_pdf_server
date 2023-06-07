@@ -47,7 +47,7 @@ def get_password_hash(password):
 
 def auth(credentials: HTTPBasicCredentials = Depends(security), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == credentials.username).first()
-    if not user or credentials.password != get_password_hash(user.password):
+    if not user or (get_password_hash(credentials.password) != user.password):
         raise HTTPException(
             status_code=HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
