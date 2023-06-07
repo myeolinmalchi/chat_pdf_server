@@ -10,8 +10,9 @@ from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.chat_models import ChatOpenAI
 from langchain.vectorstores import Chroma
 
-from chat import make_chain, query_papers
 from pydantic import BaseModel
+
+from chat import make_chain, query_papers
 from db import auth
 
 load_dotenv()
@@ -51,7 +52,7 @@ class DocInfo(BaseModel):
 class QueryDocResponse(BaseModel):
     docs: list[DocInfo]
 
-@app.get("/api/v1/docs/query/{query}", dependencies=[Depends(auth)])
+@app.get("/api/v1/docs/search", dependencies=[Depends(auth)])
 async def query_docs(query: str, topk: Optional[int] = None):
     embedded_query  = embeddings.embed_query(query)
     papers = query_papers(vectorstore, embedded_query=embedded_query, top_k=topk or 5)
