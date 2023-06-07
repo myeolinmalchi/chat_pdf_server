@@ -42,12 +42,15 @@ def get_db():
 
 bcrypt_context = CryptContext(schemes=['bcrypt'], deprecated="auto")
 
+def verify_password(plain_password, hashed_password):
+    return bcrypt_context.verify(plain_password, hashed_password)
+
 def get_password_hash(password):
     return bcrypt_context.hash(password)
 
 def auth(credentials: HTTPBasicCredentials = Depends(security), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == credentials.username).first()
-    if not user or (get_password_hash(credentials.password) != user.password):
+    if not user or not verify_password(credentials.password, user.password):
         raise HTTPException(
             status_code=HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
