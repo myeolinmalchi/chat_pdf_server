@@ -3,7 +3,7 @@ from chromadb.config import Settings
 import os
 from dotenv import load_dotenv
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, status
 from typing import List, Optional
 
 from langchain.embeddings import SentenceTransformerEmbeddings
@@ -44,6 +44,10 @@ openai = ChatOpenAI(
 ############## OpenAI ##############
 
 app = FastAPI()
+
+@app.get('/', status_code=status.HTTP_200_OK)
+def healthcheck():
+    return { 'message': 'Everything OK!' }
 
 class DocInfo(BaseModel):
     doc_idx: int
