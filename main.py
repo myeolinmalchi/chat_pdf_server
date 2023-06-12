@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from fastapi import Depends, FastAPI, status
 from typing import List, Optional
+import openai
 
 import openai_async
 
@@ -40,7 +41,7 @@ embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
 ############## OpenAI ##############
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-openai = ChatOpenAI(
+_openai = ChatOpenAI(
     model='gpt-4', 
     max_tokens=512, 
     client=None
@@ -95,25 +96,23 @@ async def query_docs(query: str, topk: Optional[int] = None):
 
 @app.post("/api/v1/docs/{doc_idx}/completion", dependencies=[Depends(auth)])
 async def qa(doc_idx: int, body: CompletionRequest) -> CompletionResponse:
-    chain = make_chain(vectorstore, openai, doc_idx)
+    chain = make_chain(vectorstore, _openai, doc_idx)
     question = body.new_question
     chat_history = [(history.question, history.answer) for history in body.chat_history]
     result = chain({"question": question, "chat_history": chat_history})
 
     return CompletionResponse(answer=result['answer']) 
 
+
 @app.post("/api/v1/classification", dependencies=[Depends(auth)])
 async def classification(body: ClassificationRequest):
-    completion = await openai_async.chat_complete(
-        api_key=OPENAI_API_KEY, 
-        timeout=300, 
-        payload={
-            "model": "gpt-4", 
-            "messages": body.messages
-        }
+    completion = openai.ChatCompletion.create(
+        model="gpt-4", 
+        messages=body.messages
     )
 
-    jsonstring = completion.json()['choices'][0]['messages']['content']
+
+    jsonstring = completion.choices[0].message
     _json = json.load(jsonstring)
     return ClassificationResponse(type=_json["type"], answer=_json["answer"])
 
