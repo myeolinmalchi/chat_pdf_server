@@ -8,3 +8,5 @@ chromadb
 kss
 openai_async
 openai
+sentence-transformers
+pypdf
