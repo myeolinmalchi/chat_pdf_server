@@ -102,7 +102,7 @@ async def qa(doc_idx: int, body: CompletionRequest) -> CompletionResponse:
 
     return CompletionResponse(answer=result['answer']) 
 
-@app.post("api/v1/classification", dependencies=[Depends(auth)])
+@app.post("/api/v1/classification", dependencies=[Depends(auth)])
 async def classification(body: ClassificationRequest):
     completion = await openai_async.chat_complete(
         api_key="", 
