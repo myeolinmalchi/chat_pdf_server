@@ -8,8 +8,6 @@ from fastapi import Depends, FastAPI, status
 from typing import List, Optional
 import openai
 
-import openai_async
-
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.chat_models import ChatOpenAI
 from langchain.vectorstores import Chroma
@@ -40,7 +38,7 @@ embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 ############## Embedding ##############
 
 ############## OpenAI ##############
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+openai.api_key = os.environ["OPENAI_API_KEY"]
 _openai = ChatOpenAI(
     model='gpt-4', 
     max_tokens=512, 
@@ -106,14 +104,24 @@ async def qa(doc_idx: int, body: CompletionRequest) -> CompletionResponse:
 
 @app.post("/api/v1/classification", dependencies=[Depends(auth)])
 async def classification(body: ClassificationRequest):
+    print(body.messages[0].dict())
     completion = openai.ChatCompletion.create(
         model="gpt-4", 
-        messages=body.messages
+        messages=[{"role": "system", "content": """As an AI Assistant, you must answer different types of questions depending on the type of question the user has. There are two types of questions: QA (Question Answering) and TD (QA About Techincal Documentation). QA is for general queries, while TD means that the user's question requires specific information about a particular technology, so you need to search for detailed documentation and include additional context. 
+
+You must answer in the following JSON string format, and do not include any additional comments or information outside of the JSON string:
+
+{
+    "type": "QA or TD",
+    "answer": "If type is TD, write a sentence or keyword to search for the appropriate article in the context of the conversation so far. If type is QA, answer the user's last question."
+}
+"""}] + [message.dict() for message in body.messages]
     )
 
 
-    jsonstring = completion.choices[0].message
-    _json = json.load(jsonstring)
+    jsonstring = completion["choices"][0]["message"]["content"]
+    print(jsonstring)
+    _json = json.loads(jsonstring)
     return ClassificationResponse(type=_json["type"], answer=_json["answer"])
 
     
