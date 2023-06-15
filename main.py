@@ -52,7 +52,7 @@ class DocInfo(BaseModel):
     doc_title: str
 
 class QueryDocResponse(BaseModel):
-    docs: list[DocInfo]
+    docs: List[DocInfo]
 
 class Chat(BaseModel):
     question: str
@@ -74,7 +74,9 @@ class ClassificationRequest(BaseModel):
 
 class ClassificationResponse(BaseModel):
     type: str
-    answer: str
+    answer: Optional[str]
+    docs: List[DocInfo]
+
 ############## Models ##############
 
 app = FastAPI()
@@ -104,24 +106,47 @@ async def qa(doc_idx: int, body: CompletionRequest) -> CompletionResponse:
 
 @app.post("/api/v1/classification", dependencies=[Depends(auth)])
 async def classification(body: ClassificationRequest):
-    print(body.messages[0].dict())
     completion = openai.ChatCompletion.create(
-        model="gpt-4", 
-        messages=[{"role": "system", "content": """As an AI Assistant, you must answer different types of questions depending on the type of question the user has. There are two types of questions: QA (Question Answering) and TD (QA About Techincal Documentation). QA is for general queries, while TD means that the user's question requires specific information about a particular technology, so you need to search for detailed documentation and include additional context. 
-
-You must answer in the following JSON string format, and do not include any additional comments or information outside of the JSON string:
-
-{
-    "type": "QA or TD",
-    "answer": "If type is TD, write a sentence or keyword to search for the appropriate article in the context of the conversation so far. If type is QA, answer the user's last question."
-}
-"""}] + [message.dict() for message in body.messages]
+        model="gpt-4-0613", 
+        messages=[{
+            "role": "system", 
+            "content": "Answer in Korean",
+        }]+[message.dict() for message in body.messages], 
+        functions=[
+            {
+                "name": "qa_or_td", 
+                "description": "Provide keywords or search terms to answer the user's question, or to find the documentation needed to answer the question.", 
+                "parameters": {
+                    "type": "object", 
+                    "properties": {
+                        "type": {
+                            "type": "string", 
+                            "description": "Answer 'TD' when you need access to external documentation to answer a user's question, or 'QA' for simple questions. Answer in Korean."
+                        }, 
+                        "answer": {
+                            "type": "string", 
+                            "answer": "If the type is TD, make a list of keywords related to the user's question. If the type is 'QA', write a response to the user's last question."
+                        }
+                    }, 
+                    "required": ["type", "answer"]
+                }, 
+            }
+        ], 
+        function_call={"name": "qa_or_td"}
     )
 
+    jsonstring = completion["choices"][0]["message"]["function_call"]["arguments"]
+    response = json.loads(jsonstring)
 
-    jsonstring = completion["choices"][0]["message"]["content"]
-    print(jsonstring)
-    _json = json.loads(jsonstring)
-    return ClassificationResponse(type=_json["type"], answer=_json["answer"])
+    if response["type"] == "TD":
+        query = response["answer"]
+        embedded_query = embeddings.embed_query(query)
+        papers = query_papers(vectorstore, embedded_query=embedded_query, top_k=5)
+        docs = [DocInfo(doc_idx=int(doc_idx), doc_title=doc_title) 
+                for (doc_idx, doc_title) in papers]
+
+        return ClassificationResponse(type="TD", answer=response["answer"], docs=docs)
+
+    return ClassificationResponse(type=response["type"], answer=response["answer"], docs=[])
 
     

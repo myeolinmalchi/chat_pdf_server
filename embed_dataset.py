@@ -29,14 +29,14 @@ def embed_pdf(path, idx, file_name, embeddings, collection_name, client_settings
     )
 
     sentences = sum(temp, [])
-    chuncks = create_chunks(sentences)
+    chunks = create_chunks(sentences)
 
     Chroma.from_texts(
-        chuncks, 
+        chunks, 
         embedding=embeddings, 
         collection_name=collection_name, 
-        metadatas=[{"doc_title": file_name, "doc_idx": idx} for _ in range(len(chuncks))], 
-        documents=[file_name for _ in range(len(chuncks))], 
+        metadatas=[{"doc_title": file_name, "doc_idx": idx} for _ in range(len(chunks))], 
+        documents=[file_name for _ in range(len(chunks))], 
         client_settings=client_settings
     )
 
