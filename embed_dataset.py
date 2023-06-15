@@ -1,4 +1,6 @@
 import os
+import re
+from typing import Any, Dict, Tuple
 
 import chromadb
 from chromadb.config import Settings
@@ -18,24 +20,73 @@ def load_pdf_files(path):
     pdf_files = [file for file in files if file.endswith('.pdf')]
     return pdf_files
 
-def embed_pdf(path, idx, file_name, embeddings, collection_name, client_settings):
-    file_path = os.path.join(path, file_name)
+# 주어진 문자열을 패턴에 맞게 정제하여 반환
+def refine_text(pattern: str, text: str) -> str:
+    pattern_data = re.findall(pattern, text)
+    regex_pattern = r"|".join([re.escape(item) for item in pattern_data])
+    refined_text = re.sub(regex_pattern, "", text)
+
+    return refined_text
+
+# 주어진 문자열에서 불필요한 텍스트를 삭제하여 반환
+def remove_dump(text: str) -> str:
+    return refine_text(
+        pattern=r'공개특허 \d+-\d+-\d+\n-\d+-|등록특허 \d+-\d+-\d+\n-\d+-|공개특허 \d+-\d+\n-\d+-|등록특허 \d+-\d+\n-\d+-', 
+        text=text
+    )
+
+# 주어진 문자열에서 줄번호를 삭제하여 반환
+def remove_line_n(text: str) -> str:
+    return refine_text(
+        pattern=r' \[\d+\]', 
+        text=text
+    )
+
+# 주어진 문자열에서 메타데이터(IPC, 발명 명칭) 추출
+def extract_metadata(text: str) -> Dict[str, Any]:
+    IPC_pattern = r'[A-Z]\d+[A-Z]? \d+/\d+'
+    IPC = re.findall(IPC_pattern, text)
+
+    metadata = { "IPC": IPC, "patent_name": "" }
+    patent_search_result = re.search(r"\(54\)([^()]+?)\n\(", text)
+    if patent_search_result is not None:
+        patent_name = patent_search_result.group(1).replace("발명의 명칭", "").replace("\n", " ")
+        metadata["patent_name"] = patent_name
+
+    return metadata
+
+# 단일 pdf파일에서 텍스트와 메타데이터를 추출
+def extract_pdf(file_path: str) -> Tuple[str, Dict[str, Any]]:
     loader = PyPDFLoader(file_path)
     pages = loader.load()
 
-    temp = split_sentences(
-        text=[page.page_content for page in pages], 
-        strip=False, 
-    )
+    page_texts = [remove_dump(page.page_content) for page in pages]
+    combined_text = " ".join(page_texts)
+    result = remove_line_n(combined_text)
+    metadata = extract_metadata(page_texts[0])
 
-    sentences = sum(temp, [])
-    chunks = create_chunks(sentences)
+    return (result, metadata)
+
+def embed_pdf(path, idx, file_name, embeddings, collection_name, client_settings):
+
+    file_path = os.path.join(path, file_name)
+    text, metadata = extract_pdf(file_path)
+
+    temp = split_sentences(text=text, strip=False)
+    chunks = create_chunks(temp, 1500)
 
     Chroma.from_texts(
         chunks, 
         embedding=embeddings, 
         collection_name=collection_name, 
-        metadatas=[{"doc_title": file_name, "doc_idx": idx} for _ in range(len(chunks))], 
+        metadatas=[
+            {
+                "doc_title": file_name, 
+                "doc_idx": idx, 
+                "chunk_idx": i, 
+                "patent_name": metadata["patent_name"], 
+                #"IPC": metadata["IPC"]
+            } for i in range(len(chunks))], 
         documents=[file_name for _ in range(len(chunks))], 
         client_settings=client_settings
     )
