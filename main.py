@@ -40,7 +40,7 @@ embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 ############## OpenAI ##############
 openai.api_key = os.environ["OPENAI_API_KEY"]
 _openai = ChatOpenAI(
-    model='gpt-4', 
+    model='gpt-3.5-turbo-0613', 
     max_tokens=512, 
     client=None
 )
@@ -107,7 +107,7 @@ async def qa(doc_idx: int, body: CompletionRequest) -> CompletionResponse:
 @app.post("/api/v1/classification", dependencies=[Depends(auth)])
 async def classification(body: ClassificationRequest):
     completion = openai.ChatCompletion.create(
-        model="gpt-4-0613", 
+        model="gpt-3.5-turbo-0613", 
         messages=[{
             "role": "system", 
             "content": "Answer in Korean",
