@@ -18,6 +18,10 @@ class CustomVectorStoreRetriever(VectorStoreRetriever):
             )
         else:
             raise ValueError(f"search_type of {self.search_type} not allowed.")
+
+        docs = [Document(page_content=doc.metadata["origin_content"], metadata=doc.metadata) for doc in docs]
+        docs = sorted(docs, key=lambda doc:doc.metadata["chunk_idx"])
+
         return docs
 
 def load_pdf_files(path):
@@ -41,9 +45,13 @@ def create_chunks(sentences, max_chunk_length=1000):
             chunks.append(current_chunk.strip())
             # Start a new chunk with the current sentence
             current_chunk = sentence.strip()
-
+    
+    current = current_chunk.strip()
     # Add the last chunk if it's not empty
-    if current_chunk.strip():
-        chunks.append(current_chunk.strip())
+    if current:
+        if len(current) < 300:
+            chunks[-1] = chunks[-1] + " " + current
+        else:
+            chunks.append(current)
 
     return chunks

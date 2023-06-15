@@ -4,8 +4,10 @@ import json
 import os
 from dotenv import load_dotenv
 
-from fastapi import Depends, FastAPI, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from typing import List, Optional
+from googletrans import Translator
+from googletrans.client import Translated
 import openai
 
 from langchain.embeddings import SentenceTransformerEmbeddings
@@ -16,8 +18,15 @@ from pydantic import BaseModel
 
 from chat import make_chain, query_papers
 from db import auth
+from script import summarize_doc
 
 load_dotenv()
+
+translator = Translator()
+
+############## Embedding ##############
+embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+############## Embedding ##############
 
 ############## Chroma DB ##############
 CHROMA_DB_HOST = os.environ['CHROMA_DB_HOST']
@@ -30,25 +39,27 @@ client_settings = Settings(
     chroma_server_http_port=CHROMA_DB_PORT
 )
 
-vectorstore = Chroma(client_settings=client_settings, collection_name=COLLECTION_NAME)
+vectorstore = Chroma(
+    client_settings=client_settings,
+    collection_name=COLLECTION_NAME, 
+    embedding_function=embeddings
+)
 ############## Chroma DB ##############
 
-############## Embedding ##############
-embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
-############## Embedding ##############
 
 ############## OpenAI ##############
 openai.api_key = os.environ["OPENAI_API_KEY"]
 _openai = ChatOpenAI(
-    model='gpt-3.5-turbo-0613', 
-    max_tokens=512, 
-    client=None
+    model='gpt-3.5-turbo-16k', 
+    max_tokens=2048, 
+    client=None, 
+    temperature=0.73, 
 )
 ############## OpenAI ##############
 
 ############## Models ##############
 class DocInfo(BaseModel):
-    doc_idx: int
+    doc_id: int
     doc_title: str
 
 class QueryDocResponse(BaseModel):
@@ -69,13 +80,16 @@ class Message(BaseModel):
     role: str
     content: str
 
+class SummarizeResponse(BaseModel):
+    script: str
+
 class ClassificationRequest(BaseModel):
     messages: List[Message]
 
 class ClassificationResponse(BaseModel):
     type: str
-    answer: Optional[str]
-    docs: List[DocInfo]
+    answer: Optional[str] = None
+    docs: Optional[List[DocInfo]] = None
 
 ############## Models ##############
 
@@ -88,21 +102,25 @@ def healthcheck():
 
 @app.get("/api/v1/docs/search", dependencies=[Depends(auth)])
 async def query_docs(query: str, topk: Optional[int] = None):
-    embedded_query  = embeddings.embed_query(query)
-    papers = query_papers(vectorstore, embedded_query=embedded_query, top_k=topk or 5)
+    papers = query_papers(query=query, vectorstore=vectorstore, top_k=topk or 5, translator=translator)
+    return QueryDocResponse(docs=[DocInfo(doc_id=int(doc_id), doc_title=doc_title) for (doc_id, doc_title) in papers])
 
-    return QueryDocResponse(docs=[DocInfo(doc_idx=int(doc_idx), doc_title=doc_title) for (doc_idx, doc_title) in papers])
+@app.get("/api/v1/docs/{doc_id}/summarize", dependencies=[Depends(auth)])
+async def summarize(doc_id: int):
+    script = summarize_doc(vectorstore=vectorstore, translator=translator, doc_id=doc_id)
+    return SummarizeResponse(script=script)
 
-
-@app.post("/api/v1/docs/{doc_idx}/completion", dependencies=[Depends(auth)])
-async def qa(doc_idx: int, body: CompletionRequest) -> CompletionResponse:
-    chain = make_chain(vectorstore, _openai, doc_idx)
+@app.post("/api/v1/docs/{doc_id}/completion", dependencies=[Depends(auth)])
+async def qa(doc_id: int, body: CompletionRequest) -> CompletionResponse:
+    chain = make_chain(vectorstore, _openai, doc_id)
     question = body.new_question
+    translated_question = translator.translate(text=question, src="ko", dest="en")
+    if isinstance(translated_question, Translated):
+        question = translated_question.text
     chat_history = [(history.question, history.answer) for history in body.chat_history]
     result = chain({"question": question, "chat_history": chat_history})
 
     return CompletionResponse(answer=result['answer']) 
-
 
 @app.post("/api/v1/classification", dependencies=[Depends(auth)])
 async def classification(body: ClassificationRequest):
@@ -114,39 +132,51 @@ async def classification(body: ClassificationRequest):
         }]+[message.dict() for message in body.messages], 
         functions=[
             {
-                "name": "qa_or_td", 
-                "description": "Provide keywords or search terms to answer the user's question, or to find the documentation needed to answer the question.", 
+                "name": "search_papers", 
+                "description": "Search for documentations related to the user's question.", 
                 "parameters": {
                     "type": "object", 
                     "properties": {
                         "type": {
                             "type": "string", 
-                            "description": "Answer 'TD' when you need access to external documentation to answer a user's question, or 'QA' for simple questions. Answer in Korean."
+                            "enum": ["QA", "TD"]
                         }, 
-                        "answer": {
+                        "query": {
                             "type": "string", 
-                            "answer": "If the type is TD, make a list of keywords related to the user's question. If the type is 'QA', write a response to the user's last question."
+                            "description": "Answer the user's question about the most recent state of the union address"
                         }
                     }, 
-                    "required": ["type", "answer"]
+                    "required": ["query", "type"]
                 }, 
-            }
+            }, 
         ], 
-        function_call={"name": "qa_or_td"}
+        function_call="auto"
     )
 
-    jsonstring = completion["choices"][0]["message"]["function_call"]["arguments"]
-    response = json.loads(jsonstring)
+    if "choices" in completion:
+        message = completion["choices"][0]["message"]
 
-    if response["type"] == "TD":
-        query = response["answer"]
-        embedded_query = embeddings.embed_query(query)
-        papers = query_papers(vectorstore, embedded_query=embedded_query, top_k=5)
-        docs = [DocInfo(doc_idx=int(doc_idx), doc_title=doc_title) 
-                for (doc_idx, doc_title) in papers]
+        # 문서 검색인 경우
+        if "function_call" in message and message["function_call"]["name"] == "search_papers":
+            jsonstring = message["function_call"]["arguments"]
+            args = json.loads(jsonstring)
+            query = args["query"]
+            print(query)
+            papers = query_papers(query=query,vectorstore=vectorstore, top_k=5, translator=translator)
+            docs = [DocInfo(doc_id=int(doc_id), doc_title=doc_title) 
+                    for (doc_id, doc_title) in papers]
 
-        return ClassificationResponse(type="TD", answer=response["answer"], docs=docs)
+            return ClassificationResponse(type="TD", docs=docs)
 
-    return ClassificationResponse(type=response["type"], answer=response["answer"], docs=[])
+        # 단순 응답인 경우
+        else:
+            answer = message["content"]
+            return ClassificationResponse(type="QA", answer=answer)
+
+    else:
+        raise HTTPException(400)
+
+
+
 
     

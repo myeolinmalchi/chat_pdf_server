@@ -5,11 +5,13 @@ from typing import Any, Dict, Tuple
 import chromadb
 from chromadb.config import Settings
 from dotenv import load_dotenv
+from googletrans.client import Translated
 from langchain.document_loaders import PyPDFLoader
 from langchain.vectorstores import Chroma
 from kss import split_sentences
 from utils import create_chunks
 from langchain.embeddings import SentenceTransformerEmbeddings
+from googletrans import Translator
 
 class EmbeddingFailureException(Exception):
     def __init__(self):
@@ -67,31 +69,45 @@ def extract_pdf(file_path: str) -> Tuple[str, Dict[str, Any]]:
 
     return (result, metadata)
 
-def embed_pdf(path, idx, file_name, embeddings, collection_name, client_settings):
+def embed_pdf(path, idx, file_name, embeddings, collection_name, client_settings, translator):
 
     file_path = os.path.join(path, file_name)
     text, metadata = extract_pdf(file_path)
 
-    temp = split_sentences(text=text, strip=False)
-    chunks = create_chunks(temp, 1500)
+    temp = split_sentences(text=text, strip=True)
+    chunks = [chunk.replace("\n", " ") for chunk in create_chunks(temp, 1500)]
+
+    chunks_eng = []
+
+    for chunk in chunks:
+        result = translator.translate(text=chunk, src="ko", dest="en")
+        if isinstance(result, Translated):
+            chunks_eng.append(result.text)
 
     Chroma.from_texts(
-        chunks, 
+        texts=chunks_eng, 
         embedding=embeddings, 
         collection_name=collection_name, 
         metadatas=[
             {
                 "doc_title": file_name, 
-                "doc_idx": idx, 
+                "doc_id": idx, 
                 "chunk_idx": i, 
-                "patent_name": metadata["patent_name"], 
+                "origin_content": chunks[i]
                 #"IPC": metadata["IPC"]
-            } for i in range(len(chunks))], 
-        documents=[file_name for _ in range(len(chunks))], 
+            } for i in range(len(chunks_eng))], 
+        documents=[file_name for _ in range(len(chunks_eng))], 
         client_settings=client_settings
     )
 
-def embed_dataset(path, chroma_client, collection_name, embeddings, client_settings):
+def embed_dataset(
+        path,
+        chroma_client,
+        collection_name,
+        embeddings,
+        client_settings, 
+        translator 
+    ):
     try:
         pdf_files = load_pdf_files(path=path)
 
@@ -110,7 +126,8 @@ def embed_dataset(path, chroma_client, collection_name, embeddings, client_setti
                 embeddings=embeddings, 
                 collection_name=collection_name, 
                 path=path, 
-                client_settings=client_settings
+                client_settings=client_settings, 
+                translator=translator
             )
             print("Done.")
 
@@ -132,6 +149,8 @@ def main():
     CHROMA_DB_HOST = os.environ['CHROMA_DB_HOST']
     CHROMA_DB_PORT = os.environ['CHROMA_DB_PORT']
 
+    translator = Translator()
+
     client_settings = Settings(
         chroma_api_impl="rest", 
         chroma_server_host=CHROMA_DB_HOST, 
@@ -149,7 +168,8 @@ def main():
         chroma_client=chroma_client, 
         collection_name='test_collection', 
         embeddings=embeddings, 
-        client_settings=client_settings
+        client_settings=client_settings, 
+        translator=translator
     )
 
 if __name__ == '__main__':
