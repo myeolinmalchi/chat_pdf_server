@@ -89,13 +89,11 @@ def make_chain(vectorstore: Chroma, llm, doc_id):
     question_generator = LLMChain(
         llm=llm, 
         prompt=CONDENSE_PROMPT, 
-        verbose=True
     )
 
     doc_chain = load_qa_chain(
         llm=llm, 
         prompt=QA_PROMPT, 
-        verbose=True
     )
 
     return ConversationalRetrievalChain(
@@ -112,7 +110,6 @@ def make_chain(vectorstore: Chroma, llm, doc_id):
         combine_docs_chain=doc_chain, 
         question_generator=question_generator, 
         return_source_documents=True, 
-        verbose=True, 
     )
 
 ############## Setup QA Chain ##############
