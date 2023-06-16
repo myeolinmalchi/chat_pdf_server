@@ -9,8 +9,6 @@ class CustomVectorStoreRetriever(VectorStoreRetriever):
     def get_relevant_documents(self, query: str) -> List[Document]:
         if self.search_type == "similarity":
             results = self.vectorstore.similarity_search_with_score(query, **self.search_kwargs)
-            #for doc, score in results:
-            #    print(f"{doc.metadata}")
             docs = [result[0] for result in results]
         elif self.search_type == "mmr":
             docs = self.vectorstore.max_marginal_relevance_search(

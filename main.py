@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from typing import List, Optional
 from googletrans import Translator
 from googletrans.client import Translated
+from langchain import LlamaCpp
 import openai
 
 from langchain.embeddings import SentenceTransformerEmbeddings
@@ -16,7 +17,7 @@ from langchain.vectorstores import Chroma
 
 from pydantic import BaseModel
 
-from chat import make_chain, query_papers
+from chat_llama import make_chain, query_papers
 from db import auth
 from script import summarize_doc
 
@@ -99,7 +100,6 @@ app = FastAPI()
 def healthcheck():
     return { 'message': 'Everything OK!' }
 
-
 @app.get("/api/v1/docs/search", dependencies=[Depends(auth)])
 async def query_docs(query: str, topk: Optional[int] = None):
     papers = query_papers(query=query, vectorstore=vectorstore, top_k=topk or 5, translator=translator)
@@ -161,7 +161,6 @@ async def classification(body: ClassificationRequest):
             jsonstring = message["function_call"]["arguments"]
             args = json.loads(jsonstring)
             query = args["query"]
-            print(query)
             papers = query_papers(query=query,vectorstore=vectorstore, top_k=5, translator=translator)
             docs = [DocInfo(doc_id=int(doc_id), doc_title=doc_title) 
                     for (doc_id, doc_title) in papers]
