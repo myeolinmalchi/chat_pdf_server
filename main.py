@@ -8,7 +8,6 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from typing import List, Optional
 from googletrans import Translator
 from googletrans.client import Translated
-from langchain import LlamaCpp
 import openai
 
 from langchain.embeddings import SentenceTransformerEmbeddings
@@ -17,7 +16,7 @@ from langchain.vectorstores import Chroma
 
 from pydantic import BaseModel
 
-from chat_llama import make_chain, query_papers
+from chat import make_chain, query_papers
 from db import auth
 from script import summarize_doc
 
