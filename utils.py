@@ -17,7 +17,7 @@ class CustomVectorStoreRetriever(VectorStoreRetriever):
         else:
             raise ValueError(f"search_type of {self.search_type} not allowed.")
 
-        docs = [Document(page_content=doc.metadata["origin_content"], metadata=doc.metadata) for doc in docs]
+        #docs = [Document(page_content=doc.metadata["origin_content"], metadata=doc.metadata) for doc in docs]
         docs = sorted(docs, key=lambda doc:doc.metadata["chunk_idx"])
 
         return docs

@@ -4,11 +4,12 @@ import json
 import os
 from dotenv import load_dotenv
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
 from typing import List, Optional
 from googletrans import Translator
 from googletrans.client import Translated
 import openai
+import PyPDF2
 
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.chat_models import ChatOpenAI
@@ -51,9 +52,8 @@ vectorstore = Chroma(
 openai.api_key = os.environ["OPENAI_API_KEY"]
 _openai = ChatOpenAI(
     model='gpt-3.5-turbo-16k', 
-    max_tokens=2048, 
     client=None, 
-    temperature=0.73, 
+    temperature=0.15, 
 )
 ############## OpenAI ##############
 
@@ -124,7 +124,7 @@ async def qa(doc_id: int, body: CompletionRequest) -> CompletionResponse:
 @app.post("/api/v1/classification", dependencies=[Depends(auth)])
 async def classification(body: ClassificationRequest):
     completion = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo-0613", 
+        model="gpt-3.5-turbo-16k", 
         messages=[{
             "role": "system", 
             "content": "Answer in Korean",
@@ -174,7 +174,13 @@ async def classification(body: ClassificationRequest):
     else:
         raise HTTPException(400)
 
+@app.post("/api/v1/pdf", dependencies=[Depends(auth)])
+async def upload_pdf(pdf: UploadFile):
+    file = await pdf.read()
+    reader = PyPDF2.PdfFileReader(file)
+    pages = reader.pages
+    docs = [page.extractText() for page in pages]
 
-
+    return {}
 
     

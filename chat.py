@@ -56,6 +56,22 @@ def query_from_doc(
 
     return docs
 
+def test(
+        query: str, 
+        vectorstore: Chroma, 
+        translator: Translator, 
+        ):
+
+    papers = query_papers(query, vectorstore, 3, translator)
+
+    for doc_id, _ in papers:
+        results = query_from_doc(query, vectorstore, translator, int(doc_id), 3)
+        contents = [page_content for _, _, page_content in results]
+        content = "\n\n".join(contents)
+
+    
+
+
 ############## 문서 검색 ##############
 
 
@@ -89,11 +105,13 @@ def make_chain(vectorstore: Chroma, llm, doc_id):
     question_generator = LLMChain(
         llm=llm, 
         prompt=CONDENSE_PROMPT, 
+        verbose=True
     )
 
     doc_chain = load_qa_chain(
         llm=llm, 
         prompt=QA_PROMPT, 
+        verbose=True
     )
 
     return ConversationalRetrievalChain(
@@ -103,7 +121,7 @@ def make_chain(vectorstore: Chroma, llm, doc_id):
                 "filter": {
                     "doc_id": doc_id
                 }, 
-                "k": 3
+                "k": 5
             }, 
             search_type="similarity"
             ), 
